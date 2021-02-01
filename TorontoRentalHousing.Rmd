@@ -1,0 +1,299 @@
+---
+title: "Toronto Rental Housing"
+author: Lee Doucet
+date: January 31st, 2021
+output:
+  pdf_document: default
+  html_document: default
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# install.packages("opendatatoronto")
+# install.packages('knitr', dependencies = TRUE)
+# install.packages("kableExtra")
+#install.packages("bibtex")
+library(bibtex)
+library(opendatatoronto)
+library(tidyverse)
+#library(knitr)
+library(kableExtra)
+
+```
+ 
+```{r Getting Data from Open Data Toronto, include=FALSE}
+
+rawApartmentEval <- 
+  opendatatoronto::search_packages("Apartment Building Evaluation") %>%
+  opendatatoronto::list_package_resources() %>%
+  filter(name == "Apartment Building Evaluation") %>% # This is the row that we are interested in
+  select(id) %>%
+  opendatatoronto::get_resource()
+
+## Apartment Regulation
+rawApartmentReg <- 
+  opendatatoronto::search_packages("Building Registration") %>%
+  opendatatoronto::list_package_resources() %>%
+  filter(name == "Apartment Building Registration Data") %>% #This is the row that we are interested in
+  select(id) %>%
+  opendatatoronto::get_resource()
+
+```
+
+# Introduction 
+
+	The City of Toronto protects renters in apartment buildings through a program 
+called RentSafeTo where they enact a bylaw enforcement program, Apartment 
+Building Standards (ABS). Specific maintenance standards and procedures are 
+laid out for the tenant’s behalf, including their right to have a landlord 
+respond to urgent service requests (e.g. no heat or water) within 24 hours of
+being reported. Tenants who experience problems with these standards are able 
+to contact the RentSafeTo team through 311 to escalate their concerns. An 
+important consideration is these protections apply to apartment buildings
+alone. Whose definition is that an “apartment building is a purpose-built 
+rental building with 3 more storeys and 10 or more rental units but does not
+include long-term care, a licensed retirement home or a housing 
+co-operative”[@citeRentSafeTo]. This also excludes condo buildings,
+townhomes, and units residing within the basement level or main floor of a 
+private home from the program. 
+	
+	With Toronto’s growing population and concerns over equitable access to 
+housing, a one-size fits all approach with strictly private rentals would 
+not address the housing concerns of all residents within Toronto. To 
+ensure everyone has equal access to adequate housing, the Ontario Human 
+Rights Commission (OHRC) promotes the increased availability of social 
+housing in compliance with Canada’s commitment to provide adequate housing
+for all Canadians [@citeOHRC]. The largest social housing provider in 
+Canada is the Toronto Community Housing Corporation (TCHC) and manages
+60,000 rental housing units with a mandate to “to provide clean, safe, 
+secure homes in a state of good repair to low and mode and moderate-income 
+households, including seniors, families, singles, refugees, recent immigrants
+to Canada and people with special needs” [@citeTCHC]. 
+	
+	The focus of this paper will be an exploratory analysis of the apartment 
+buildings in Toronto, examining their state of condition and much progression
+Canada has made in regards to their policy goal of providing adequate housing
+for all Canadians. To answer that question, data will be pulled from the
+Toronto Open Data Portal exclusively. Once that has been investigated, the
+research questions will shift to examine different facets of the Toronto
+rental market that may have the opportunity to provide important insights 
+to social housing advocates such 
+
+```{r Combining Data Sets & Cleaning up, include=FALSE}
+
+apartmentReg <- rawApartmentReg
+apartmentEval <- rawApartmentEval
+
+apartmentReg <-
+    apartmentReg %>%        #Removing unessential columns
+    select(RSN, PCODE,APPROVED_FIRE_SAFETY_PLAN, FIRE_ALARM,
+            IS_THERE_EMERGENCY_POWER, NO_BARRIER_FREE_ACCESSBLE_UNITS,
+            PROP_MANAGEMENT_COMPANY_NAME)
+
+apartmentEval <- 
+     apartmentEval %>%
+     select(RSN,CONFIRMED_UNITS, PROPERTY_TYPE, YEAR_BUILT,
+            SECURITY,CONFIRMED_UNITS, WARD, SCORE)
+
+allData <- merge(apartmentReg,apartmentEval, by = "RSN") #Common identifier in both data sets 
+
+allData$SCORE <- as.numeric(allData$SCORE) # Making Apartment Score numeric
+
+allData <- allData[!is.na(allData$SCORE),] #Removing 13 NA's 
+
+allData <-       #Cleaning up names too long and full of CAPS
+  rename(allData, c("pCode" = "PCODE", "firePlan" = "APPROVED_FIRE_SAFETY_PLAN", 
+                   "fireAlarm" = "FIRE_ALARM", "rentalScore" = "SCORE",
+                   "emergPower" = "IS_THERE_EMERGENCY_POWER",
+                   "rentalUnits" = "CONFIRMED_UNITS",
+                   "propertyManager" = "PROP_MANAGEMENT_COMPANY_NAME",
+                   "propertyType" = "PROPERTY_TYPE", "yearBuilt" = "YEAR_BUILT",
+                   "security" = "SECURITY", "ward" = "WARD", "rsn" = "RSN",
+                   "accessUnits" ="NO_BARRIER_FREE_ACCESSBLE_UNITS" ))
+
+``` 
+
+#Data 
+	
+##Methodology 
+	
+	  To investigate the rental apartment housing in Toronto, their open data 
+portal was accessed from theirwebsite and a search was conducted for 
+apartment.The query provided two results, Apartment Building Evaluation with 
+a gold data quality score , and Apartment Building Registration with a silver 
+data quality score. Data sets are published by Municipal Licensing & Standards 
+and covered under an Open Government License – Toronto, for distribution. 
+	
+## Key Features 
+	
+	The main benefit of using these two data sets is their interoperability with 
+each other through the specific building identification number (RSN). This
+allows the combination of the regulation attributes (e.g. Fire Code) and the
+evaluation metrics (e.g. Building Score) to test if there are any 
+correlations in the data. With the data conducted by inspectors there is 
+strong reason to have confidence in the validity of what data has been 
+collected. There is also the social good that comes from this data as people
+can gain more insight into what buildings perform better and which ones 
+struggle with compliance. Having clear metrics like Score allows for various 
+other attributes to be tested against it to look for variation in the data, 
+with our first test being if the type of property has any impact on the 
+overall score of the building. The items that were included in Score are 
+also broken down so the user can test different attributes (e.g. Security) 
+if they want a narrower focus in their research. 
+
+	Within the data there is a range of the completeness with fields such as 
+Amenities Available having most of displayed NA. Other parts of the data 
+are contradictory as 2362 Islington Ave lists no pets but, in another field,
+says only small dogs. Many columns require extensive cleaning for use, 
+Property Management Company for instance has many variations of spellings 
+which make use difficult. There are data fields that are not present that 
+would be very helpful such as average rent or number of validated violations 
+reported against a building. All apartments that do not fall within the
+definition are also missing and add a significant amount to the rental
+inventory. It’s also not clear what fields account for what percentage of 
+the total score if certain fields contain more weight or not. 
+
+	
+	From an ethics perspective, the primary concern is between whom the 
+relationship is between in regards to the data. In each data set, it’s 
+strictly how the building performs based on observable metrics but does not 
+consider the lifeblood of the building, the residents. If a building gets a 
+security score of 4 out of 5, for whom is that score based on, a male or a 
+female or even a visible minority? A woman walking from her car at night 
+would have much different needs than a woman late at night. The evaluation 
+also only takes place within the building common areas so there is indication 
+of what is transpiring inside tenant space. Landlords be would incentivized 
+to do the minimal inside tenant space to avoid interactions ABS complaints 
+and then too maximize the common areas of the building to attract new tenants
+and receive high evaluation scores. 
+
+##Merging the Data Sets 
+	
+	To make the data easier to work with, Apartment Evaluations was combined 
+with Regulations by the mutual column RSN. With 100 columns together between 
+the two data sets, 13 were selected based on their usefulness for a direct 
+comparison (e.g. Score, Property Type, Postal Code) and other being 
+attributes to investigate (e.g. Emergency Power, Fire Alarm status). Once 
+they were organized together, there were deemed useable for analysis. 
+
+```{r Data Prep for Chart 1 - Rental Summary / Frequency Table + Averages, include=FALSE }
+
+chart1 <-
+  allData %>%
+  select(propertyType, rentalScore) #Want to compare these two columns 
+
+property1 <-  #Average Rental Score of each property type 
+  aggregate(. ~ propertyType, chart1, mean) 
+
+property2 <- aggregate(cbind(count = propertyType) ~ propertyType, 
+                  data = allData, 
+                  FUN = function(x){NROW(x)}) # Sum Property Type
+
+chart1 <- merge(property1,property2, by = "propertyType")
+
+chart1 <- #Getting Proper Names 
+  rename(chart1, c("Property Type" = "propertyType", 
+                   "Average Rental Score" = "rentalScore",
+                   "Total Amount" = "count"))
+
+```
+
+## Research Question 1 – Do total scores differ amongst the three different 
+##rental building types? 
+
+
+```{r Summary Chart , echo=FALSE}
+
+chart1 %>% #Creating a chart to display the data for Property Type by Score/Count
+  knitr::kable(caption = "Table 1: Summary statistics", digits = 2) %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width =  FALSE)
+
+```
+
+#Graph 1 
+
+  Our data is from [@citeR]
+
+```{r Graphical Version of Chart 1, echo=FALSE}
+
+graph1 <- 
+ggplot(data = allData, aes(x = propertyType, y = rentalScore, fill = propertyType)) +
+  geom_boxplot() +
+  ylab("Building Evaluation (%)") +
+  xlab("Property Type")
+  ggtitle("                 Distribution Scores Between Apartment Types ")
+  
+graph1
+
+```
+## Research Question 2 - Does Postal Code Impact Rental Score? 
+
+```{r Graph 2 Data, echo = FALSE }
+
+graph2Data <-
+  allData %>%
+  select(pCode,rentalScore) #Gathering data for the graph
+
+graph2Avg <-
+  aggregate(. ~ pCode,graph2Data, mean) #Getting Rental Score Average
+
+graph2Count <- aggregate(cbind(count = pCode) ~ pCode, 
+                   data = graph2Data, 
+                   FUN = function(x){NROW(x)}) # Building Count Per Postal Code
+
+graph2Combine <- merge(graph2Avg,graph2Count, by = "pCode") #Combination
+
+graph2 <- 
+attach(graph2Combine)
+plot(count, rentalScore, main="Relationship Between Average Rental Price and Postal Code",
+     xlab="Number of Rentals in Postal Code ", ylab="Score Per Rental ", pch=19) +
+     abline(lm(rentalScore~count), col="red") 
+graph2
+
+
+```
+
+```{r Chart 2 Data, echo = FALSE }
+
+chart2Data <-
+  allData %>%
+  select(propertyType,rentalUnits, accessUnits)
+     
+chart2Data <-
+  chart2Data %>%
+  filter(rentalUnits < 750)
+
+chart2Data$accessUnits <- as.numeric(chart2Data$accessUnits)
+  
+chart2Agg <-  
+    aggregate(. ~ propertyType, chart2Data, sum) 
+
+chart2 <-
+mutate(chart2Agg, Percentage = rentalUnits / accessUnits)
+
+chart2 <-
+  rename(chart2, c("Property Type" = "propertyType",
+                   "Rental Units" = "rentalUnits",
+                   "Accessibility Units" = "accessUnits"))
+
+chart2 %>% #Creating a chart to display the data for Property Type by Score/Count
+  knitr::kable(caption = "Table 2: Summary statistics", digits = 2) %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width =  FALSE)
+
+
+```
+
+##References 
+
+
+```{r Scatter Graph, echo= FALSE}
+
+
+
+
+
+
+```
+
+
