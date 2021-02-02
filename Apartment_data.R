@@ -1,21 +1,26 @@
+#### Preamble ####
+# Purpose: Use opendatatoronto to get Toronto dwelling data 
+# Author: Lee Doucet
+# Contact: Lee.Doucet@mail.utoronto.ca
+# Date: 30 January 2021 
+#Pre-requisites; None
+# TODOs: - 
+
+
 #### Workspace set-up ####
 # install.packages("opendatatoronto")
 library(opendatatoronto)
 library(tidyverse)
-
-
-#TO_Do_List 
-# Build Final Columns For Questions 
 
 ### Question(s) ###
 
 # 1) What are the differences between living in a private dwelling, TCH, or Social Housing 
 
 
-### Getting Data ###
+#### Getting Data ####
 
 ## Apartment Evaluation
-raw_apartment_eval <- 
+rawApartmentEval <- 
   opendatatoronto::search_packages("Apartment Building Evaluation") %>%
   opendatatoronto::list_package_resources() %>%
   filter(name == "Apartment Building Evaluation") %>% #This is the row that we are interested in
@@ -23,7 +28,7 @@ raw_apartment_eval <-
   opendatatoronto::get_resource()
 
 ## Apartment Regulation
-raw_apartment_reg <- 
+rawAartmentReg <- 
   opendatatoronto::search_packages("Building Registration") %>%
   opendatatoronto::list_package_resources() %>%
   filter(name == "Apartment Building Registration Data") %>% #This is the row that we are interested in
@@ -56,14 +61,14 @@ raw_short_rentals <-
 
 ### Cleaning Evaluation Data ###
 
-apartment_reg <- raw_apartment_reg
-apartment_eval <- raw_apartment_eval
+apartmentReg <- rawApartmenTReg
+apartmentEval <- rawApartmentEval
 
 apartment_reg <-
     apartment_reg %>%
     select(RSN, PCODE, AMENITIES_AVAILABLE, 
-           APPROVED_FIRE_SAFETY_PLAN, BALCONIES, 
-           FIRE_ALARM, IS_THERE_EMERGENCY_POWER, NON_SMOKING_BUILDING, PROP_MANAGEMENT_COMPANY_NAME)
+           APPROVED_FIRE_SAFETY_PLAN, FIRE_ALARM,
+           PROP_MANAGEMENT_COMPANY_NAME)
 
 apartment_eval <- 
   apartment_eval %>%
@@ -78,6 +83,13 @@ all_data <- all_data[!is.na(all_data$SCORE),]
 data_chart1 <-
   all_data %>%
   select(PROPERTY_TYPE, SCORE) 
+
+data <-
+  raw_apartment_eval %>%
+  select(CONFIRMED_UNITS,PROPERTY_TYPE)
+
+data1 <-  
+  aggregate(. ~ PROPERTY_TYPE, data, sum) 
 
 data_chart2 <-
   all_data %>%
@@ -136,8 +148,9 @@ chart3air <-
 chart3air <- aggregate(cbind(count = postal_code) ~ postal_code, 
                    data = chart3air, 
                    FUN = function(x){NROW(x)}) 
+
 chart3air <- 
-  rename(chart3air, c("postal_code" = "PCODE"))
+  rename(chart3air, c("PCODE" = "postal_code"))
 
 chart3pscore <-
   all_data %>%
@@ -153,16 +166,16 @@ chart3pcount <- aggregate(cbind(count = PCODE) ~ PCODE,
 
 chart3pscore <- merge(chart3pcount,chart3pavg, by = "PCODE")
 
-chart3<- merge(chart3pscore, chart3air, by = "PCODE")
+summary(chart3pscore$SCORE)
+
+chart3<- merge(chart3air, chart3pscore, by = "PCODE")
 
 chart3 <- 
-  rename(chart3, c("count.x" = "Number of Apartments", 
-                   "PCODE" = "Postal Code", "SCORE" = "Average Area Apartment Score", 
-                   "count.y" = "Number of Registered Airbnb's"))
+  rename(chart3, c("Number of Apartments" ="count.x", 
+                   "Postal Code" = "PCODE", "Average Area Apartment Score" = "SCORE", 
+                   "Number of Registered Airbnb's" ="count.y"))
 
 chart3 <- chart3[, c(1, 2, 4,3)]
-
-summary(test)
 
 ### Plot the Data ###
 
@@ -171,10 +184,176 @@ ggplot(data = all_data, aes(x = PROPERTY_TYPE, y = SCORE, fill = PROPERTY_TYPE))
   ylab("Building Evaluation (%)") +
   ggtitle("                     Distribution Scores Between Apartment Types ")
 
+attach(chart3pscore)
+plot(count, SCORE, main="Scatterplot Example",
+     xlab="Number of Rentals in Postal Code ", ylab="Score Per Rental ", pch=19) +
+  abline(lm(SCORE~count), col="red") +
+  lines(lowess(count,SCORE), col="blue")
 
-ggplot(data = test, aes(x = Postal Code, y =SCORE)) +
-  geom_bar(stat = "identity") +
-  ylab("Scores (Out of 100)")+
-  xlab("Ward Number") +
-  ggtitle("          Apartment Evaluation Scores ")
+
+#### Save Data ####
+write_csv(all_data, "/Users/kerrybruner/Downloads/Hardcore Canadian Tire /School/UofT Winter 2021/Experimental Design/Project Test/Data_Exploration/raw_data.csv")
+
+
+graph2Data <-
+  allData %>%
+  select(pCode,rentalScore) #Gathering data for the graph
+
+graph2Avg <-
+  aggregate(. ~ pCode,graph2Data, mean) #Getting Rental Score Average
+
+graph2Count <- aggregate(cbind(count = pCode) ~ pCode, 
+                         data = graph2Data, 
+                         FUN = function(x){NROW(x)}) # Building Count Per Postal Code
+
+graph2Combine <- merge(graph2Avg,graph2Count, by = "pCode") #Combination
+
+graph2 <- 
+  attach(graph2Combine)
+plot(count, rentalScore, main="Relationship Between Average Rental Price and Postal Code",
+     xlab="Number of Rentals in Postal Code ", ylab="Score Per Rental ", pch=19) +
+  abline(lm(rentalScore~count), col="red") 
+graph2
+
+
+
+### Test code 
+
+builtGraph <- 
+  allData %>%
+  select(propertyType,yearBuilt) 
+
+sortBuiltGraph <-
+  builtGraph %>%
+  filter(builtGraph$yearBuilt > 1966) #range picked to make the data look more clear
+
+sortBuiltGraph <-
+  filter(sortBuiltGraph, propertyType == "SOCIAL HOUSING") 
+
+builtGraph <-
+  aggregate(sortBuiltGraph[,1:2], list(sortBuiltGraph$propertyType), mean)
+
+
+ggplot(data=builtGraph, aes(x=yearBuilt, propertyType, group=1)) +
+  geom_step(color="blue")+
+  geom_point() +
+  xlab("Year Built") +
+  ylab("Number of Social Housing Units Built") +
+  scale_color_grey() + theme_classic() +
+  theme(legend.position="top") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+test12 <-
+test1 %>%
+  group_by(PROPERTY_TYPE, YEAR_BUILT) %>% 
+  summarise_each(funs(length))
+
+test12 <-
+test12 %>%
+  select(PROPERTY_TYPE, YEAR_BUILT) %>%
+  mutate(total = mean(test12$YEAR_BUILT))
+
+allData %>%
+group_by(propertyType, yearBuilt) %>% 
+  summarise_each(funs(length))
+
+
+builtGraph <- 
+  allData %>%
+  select(propertyType,yearBuilt) 
+
+sortBuiltGraph <-
+  builtGraph %>%
+  filter(builtGraph$yearBuilt > 1950)
+
+sortBuiltGraph <-
+  filter(sortBuiltGraph, propertyType == "SOCIAL HOUSING") 
+
+builtGraph <-
+  aggregate(. ~ yearBuilt,sortBuiltGraph, length)
+
+  
+ggplot(data=builtGraph, aes(x=yearBuilt, propertyType, group=1)) +
+  geom_step(color="red")+
+  geom_point() +
+  xlab("Year Built") +
+  ylab(" Number of Apartment Buildings Built") +
+  scale_color_grey() + theme_classic() +
+  theme(legend.position="top") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+stage2 <-
+  aggregate(. ~ yearBuilt,test2, length)
+
+
+stage2 <-
+  stage2 %>%
+  filter(stage2$yearBuilt > 1950)
+
+
+summary(test2)
+
+test3 <-
+  filter(all_data, PROPERTY_TYPE == "TCHC") %>%
+  select(PROPERTY_TYPE,YEAR_BUILT, SCORE) 
+
+summary(test3)
+
+test4 <-
+  filter(all_data, PROPERTY_TYPE == "PRIVATE") %>%
+  select(YEAR_BUILT, SCORE) 
+
+summary(test4)
+
+stage <-
+  aggregate(. ~ YEAR_BUILT,test4, length)
+
+stage <-
+stage %>%
+  filter(stage$YEAR_BUILT > 1950)
+
+stage1 <-
+  aggregate(. ~ YEAR_BUILT,test3, length)
+
+stage1 <-
+  stage1 %>%
+  filter(stage1$YEAR_BUILT > 1950)
+
+
+
+
+
+
+ggplot(data=stage, aes(x=YEAR_BUILT, PROPERTY_TYPE, group=1)) +
+  geom_line()+
+  geom_point()
+
+ggplot(data=stage1, aes(x=YEAR_BUILT, PROPERTY_TYPE, group=1)) +
+  geom_line()+
+  geom_point()
+
+
+
+library(ggplot2)
+ggplot(data=test4, aes(x=YEAR_BUILT, SCORE, group=1)) +
+  geom_line()+
+  geom_point()
+
+ACC <-
+  rawApartmentReg %>%
+  select(PROPERTY_TYPE,CONFIRMED_UNITS, NO_BARRIER_FREE_ACCESSBLE_UNITS) 
+
+ACC <-
+  ACC %>%
+  filter(ACC$CONFIRMED_UNITS < 750)
+
+  ACC$NO_BARRIER_FREE_ACCESSBLE_UNITS <- as.numeric(ACC$NO_BARRIER_FREE_ACCESSBLE_UNITS)
+  
+ACC <-  
+    aggregate(. ~ PROPERTY_TYPE, ACC, sum) 
+
+ACC <-
+mutate(ACC, Percentage = CONFIRMED_UNITS / NO_BARRIER_FREE_ACCESSBLE_UNITS)
 

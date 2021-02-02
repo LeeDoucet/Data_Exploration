@@ -1,7 +1,8 @@
 ---
 title: "Private and Government Rental Apartment Compairson in Toronto"
 author: "Lee Doucet"
-date: "January 31st, 2021"
+date:  r format(Sys.time(), "%d %B %Y")
+thanks: "Code and data are available at:test.com"
 output:
   pdf_document: default
   html_document:
