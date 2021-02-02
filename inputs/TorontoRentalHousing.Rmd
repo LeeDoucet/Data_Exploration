@@ -1,0 +1,517 @@
+---
+title: "Private and Government Rental Apartment Compairson in Toronto"
+author: "Lee Doucet"
+date:  "February 1st 2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# install.packages("opendatatoronto")
+# install.packages('knitr', dependencies = TRUE)
+# install.packages("kableExtra")
+# install.packages("bibtex")
+# install.packages("here")
+library(here)
+library(bibtex)
+library(opendatatoronto)
+library(tidyverse)
+library(kableExtra)
+
+```
+# Abstract 
+
+Research that uses Toronto Open Data to compare the differences in 
+the Toronto apartment rental markets between the private sector and social 
+housing offered by the government. Brings together the data sets from apartment
+evaluations and regulations conducted by city inspectors and cleans them up 
+for analysis.Finally, builds upon the first research question and investigates
+differences in accessibility between private and social housing to determine
+what level of access some of Toronto's most vulnerable have afforded to them. It 
+was written and analyzed using [@citeR] and the packages available through open
+software use. 
+
+
+
+```{r Getting Data from Open Data Toronto, include=FALSE}
+
+rawApartmentEval <- 
+  opendatatoronto::search_packages("Apartment Building Evaluation") %>%
+  opendatatoronto::list_package_resources() %>%
+  filter(name == "Apartment Building Evaluation") %>% # This is the row that we are interested in
+  select(id) %>%
+  opendatatoronto::get_resource()
+
+## Apartment Regulation
+rawApartmentReg <- 
+  opendatatoronto::search_packages("Building Registration") %>%
+  opendatatoronto::list_package_resources() %>%
+  filter(name == "Apartment Building Registration Data") %>% #This is the row that we are interested in
+  select(id) %>%
+  opendatatoronto::get_resource()
+
+write.csv(here::here( "inputs/data/toronto_housing_data.csv"))
+```
+
+# Introduction 
+
+The City of Toronto protects renters in apartment buildings through a program 
+called RentSafeTo where they enact a bylaw enforcement program, Apartment 
+Building Standards (ABS). Specific maintenance standards and procedures are 
+laid out for the tenant’s behalf, including their right to have a landlord 
+respond to urgent service requests (e.g. no heat or water) within 24 hours of
+being reported. Tenants who experience problems with these standards are able 
+to contact the RentSafeTo team through 311 to escalate their concerns. An 
+important consideration is these protections apply to apartment buildings
+alone. Whose definition is that an “apartment building is a purpose-built 
+rental building with 3 more storeys and 10 or more rental units but does not
+include long-term care, a licensed retirement home or a housing 
+co-operative”[@citeRentSafe]. This also excludes condo buildings,
+townhomes, and units residing within the basement level or main floor of a 
+private home from the program. 
+
+	
+With Toronto’s growing population and concerns over equitable access to 
+housing, a one-size fits all approach with strictly private rentals would 
+not address the housing concerns of all residents within Toronto. To 
+ensure everyone has equal access to adequate housing, the Ontario Human 
+Rights Commission (OHRC) promotes the increased availability of social 
+housing in compliance with Canada’s commitment to provide adequate housing
+for all Canadians [@citeOHRC]. The largest social housing provider in 
+Canada is the Toronto Community Housing Corporation (TCHC) and manages
+60,000 rental housing units with a mandate to “to provide clean, safe, 
+secure homes in a state of good repair to low and mode and moderate-income 
+households, including seniors, families, singles, refugees, recent immigrants
+to Canada and people with special needs” [@citeTCHC]. 
+
+	
+The focus of this paper will be an exploratory analysis of the apartment 
+buildings in Toronto, examining their state of condition and much progression
+Canada has made in regards to their policy goal of providing adequate housing
+for all Canadians. To answer that question, data will be pulled from the
+Toronto Open Data Portal exclusively. Once that has been investigated, any 
+other research insights that present themselves will be examined that 
+pertains to the Toronto rental market. The goal is provide a framework of data 
+that can be built upon for policy planners at the city or advocacy organizations
+such as ACORN Toronto.Finally, as this research is exploratory, it will hope to 
+highlights future areas of research opportunities and suggest new data avenues 
+for the Toronto Open Data Portal to collect. 
+
+```{r Combining Data Sets & Cleaning up, include=FALSE}
+
+apartmentReg <- rawApartmentReg
+apartmentEval <- rawApartmentEval
+
+apartmentReg <-
+    apartmentReg %>%        #Removing unessential columns
+    select(RSN, PCODE,APPROVED_FIRE_SAFETY_PLAN, FIRE_ALARM,
+            IS_THERE_EMERGENCY_POWER, NO_BARRIER_FREE_ACCESSBLE_UNITS,
+            PROP_MANAGEMENT_COMPANY_NAME)
+
+apartmentEval <- 
+     apartmentEval %>%
+     select(RSN,CONFIRMED_UNITS, PROPERTY_TYPE, YEAR_BUILT,
+            SECURITY,CONFIRMED_UNITS, WARD, SCORE)
+
+allData <- merge(apartmentReg,apartmentEval, by = "RSN") #Common identifier in both data sets 
+
+allData$SCORE <- as.numeric(allData$SCORE) # Making Apartment Score numeric
+
+allData <- allData[!is.na(allData$SCORE),] #Removing 13 NA's 
+
+allData <-       #Cleaning up names too long and full of CAPS
+  rename(allData, c("pCode" = "PCODE", "firePlan" = "APPROVED_FIRE_SAFETY_PLAN", 
+                   "fireAlarm" = "FIRE_ALARM", "rentalScore" = "SCORE",
+                   "emergPower" = "IS_THERE_EMERGENCY_POWER",
+                   "rentalUnits" = "CONFIRMED_UNITS",
+                   "propertyManager" = "PROP_MANAGEMENT_COMPANY_NAME",
+                   "propertyType" = "PROPERTY_TYPE", "yearBuilt" = "YEAR_BUILT",
+                   "security" = "SECURITY", "ward" = "WARD", "rsn" = "RSN",
+                   "accessUnits" ="NO_BARRIER_FREE_ACCESSBLE_UNITS" ))
+
+``` 
+
+# Data 
+
+
+## Methodology 
+	
+	
+To investigate the rental apartment housing in Toronto, their open data 
+portal was accessed from their website where a search was conducted for data 
+sets related to apartments The query provided two results, Apartment Building 
+Evaluation with a gold data quality score and Apartment Building Registration 
+with a silver data quality score. Data sets are published by Municipal 
+Licensing & Standards and covered under an Open Government License – Toronto, 
+for distribution. 
+	
+
+## Data Description 
+
+
+Both data sets include all apartment rental buildings in Toronto as per the 
+aforementioned definition in the introduction. Building owners are required to 
+register and renew annually within the compliance of the RentSafeTO program.
+Audits are conducted by the city inspectors at least once every three years with 
+increased frequency of inspections depending on the amount of property 
+standard issues currently present in the building.The program has been in 
+effect since 2017 when the first buildings were registered.
+	
+# Data Sets 
+	
+#### Apartment Building Evaluation Data Set Highlights [@citeEval]
+
+- Total Data: 3462 rows of data across 70 variables	
+-	RSN: A 7-digit number to Identify the building across different data sets 
+-	Property Type: Either Private, Social Housing, or TCHC
+-	Ward: Which of the 25 wards in Toronto does this building reside 
+-	Score: Out of 100 what did this building score 
+-	Confirmed Units: Total amount of units present in the building 
+-	Year Built: When was this building built 
+- Security: Gives the security score (out of five)
+
+#### Apartment Building Registration Data Set Highlights [@citeReg]
+
+- Total Data: 3461 rows of data across 33 variables 
+-	RSN: A 7-digit number to Identify the building across different data sets 
+-	Property Type: Either Private, Social Housing, or TCHC
+-	PCODE: Postal Code of the building 
+-	Property Management Company Name: Identify the owner of the building
+-	No Barrier Free Accessible Units: Number of accessible units present in 
+  the building
+- Fir Alarm: Does the building have an active fire alarm
+- Approved Fire Safety Plan: Does the building have an approved fire safety plan
+
+
+\newpage
+	
+## Key Features 
+	
+	
+The main benefit of using these two data sets is their interoperability with 
+each other through the specific building identification number (RSN). This
+allows the combination of the regulation attributes (e.g. Fire Code) and the
+evaluation metrics (e.g. Building Score) to test if there are any 
+correlations in the data. With the data conducted by inspectors there is 
+strong reason to have confidence in the validity of what data has been 
+collected. There is also the greater social good that comes from open data 
+that informs citizens which buildings perform the best and which ones struggle
+with compliance. Having a clear metrics such as Building Score allows for 
+other attributes to be tested against it to look for relationships, or the lack
+of them in the data. For example, we can examine the relationship between the
+property type of the building while analyzing it against the overall score of
+the building. The metric Score can also be further broken down into any 
+quantifiable attributes presented (e.g. Security) that a part of the overall 
+score if a narrower focus is desired for research. 
+
+Within the data there is a range of the completeness among the data fields. For
+instance, Amenities Available has most of its data displayed as NA. Some fields
+hold contradictory information with related fields with 2362 Islington Ave 
+listing no pets, but in another field, says that small dogs are okay. 
+Many fields require extensive cleaning for use, the Property Management Company 
+field has many variations of spellings or additional punctuation that makes 
+use difficult without proper cleaning of the data. 
+ 
+There are also data fields that are not present that would have been very 
+helpful such as average rent or total number of validated violations 
+reported against a building. All apartments that do not fall within the
+definition are also missing and add a significant amount to the rental
+inventory. It’s also not clear what fields account for what percentage of 
+the total score if certain fields contain more weight or not. For instance,
+not all buildings have balconies, does that mean that the field is not 
+calculated in total score for all buildings or just for buildings without a 
+balcony.
+
+From an ethical perspective, the primary concern is between whom the 
+relationship is between in regards to the data. In each data set, it’s 
+strictly how the building performs based on observable metrics but does not 
+consider the lifeblood of the building, the residents. If a building gets a 
+security score of 4 out of 5, for whom is that score based on, a male or a 
+female, or even a visible minority? A woman walking from her car at night 
+would have much different security needs to feel safe at night than a man. The 
+The evaluation also only takes place within the building common areas so there 
+is little indication of what is transpiring inside tenant space. The data does
+not say the tenants appliances are being taken care by the landlords and tenant.
+Landlords could possibly be incentivized to do the least amount of upkeep inside 
+the tenant space to prevent the tenant from lodging a complaint. This could 
+actually be happening and there would be no way to tell from this data. This is 
+why it is important to use open data as a starting point to investigate and 
+ask better questions that are informed with the data. 
+
+
+
+
+## Merging the Data Sets 
+
+	
+To make the data easier to work with, Apartment Evaluations was combined 
+with Regulations by the mutual column RSN. With 100 columns together between 
+the two data sets, 13 were selected based on their usefulness for a direct 
+comparison (e.g. Score, Property Type, Postal Code) and other being 
+attributes to investigate (e.g. Emergency Power, Fire Alarm status). Once 
+they were organized together, the data was examined and areas for research
+analysis were investigated. 
+
+\newpage
+
+```{r Data Prep for Chart 1 - Rental Summary / Frequency Table + Averages, include=FALSE }
+
+chart1 <-
+  allData %>%
+  select(propertyType, rentalScore) #Want to compare these two columns 
+
+property1 <-  #Average Rental Score of each property type 
+  aggregate(. ~ propertyType, chart1, mean) 
+
+property2 <- aggregate(cbind(count = propertyType) ~ propertyType, 
+                  data = allData, 
+                  FUN = function(x){NROW(x)}) # Sum Property Type
+
+chart1 <- merge(property1,property2, by = "propertyType")
+
+chart1 <- #Getting Proper Names 
+  rename(chart1, c("Property Type" = "propertyType", 
+                   "Average Rental Score" = "rentalScore",
+                   "Total Amount" = "count"))
+
+```
+
+
+# Research Question - Does the Rental Score Vary Across Property Types?
+
+
+
+The results from Graph 1 show how the data is distributed among the three 
+property types. Each box plot shows the range of the data where most of it 
+located with the black line representing the median of the data. From this
+graph, social housing appears to have scored the highest with private rentals 
+very close. TCHC housing is lagging behind the both of them with much lower 
+scores. It also tells us the outliers from the data, demonstrating that private
+rental housing has the best overall units but also the worst. An abundance of 
+lower units on the range for private rentals is not surprising considering 
+some of the strategies enacted through the financialization of the private 
+rental housing market. Take for example in the non-gentrifying parts of New 
+York’s outer boroughs, the private equity firms that own them use strategic u
+nder maintenance for those who are low-income and immigrant populations. 
+This group has little options to find better lodgings so they must suffer 
+reduced services and higher rents[@citeAUG]. Let’s examine the actual numbers 
+of each property type present. 
+
+$$\\[1in]$$
+
+
+```{r Summary Chart , echo=FALSE,  fig.pos="H"}
+
+graph1 <- 
+ggplot(data = allData, aes(x = propertyType, y = rentalScore, fill = propertyType)) +
+  geom_boxplot() +
+  ylab("Building Evaluation (%)") +
+  xlab("Property Type") +
+  ggtitle("Graph 1 - Distribution Scores Between Apartment Types ") +
+  labs(caption = "(Based on data from ggPlot2 (Wickham 2016) & R (R Core Team 2020))") +
+  scale_fill_discrete(name = "Property Type")
+graph1
+
+
+```
+
+
+
+\newpage
+
+
+```{r Graphical Version of Chart 1, echo=FALSE,  fig.pos="H"}
+
+chart1 %>% #Creating a chart to display the data for Property Type by Score/Count
+  knitr::kable(caption = "Summary statistics", digits = 2) %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width =  FALSE)
+
+
+```
+
+Table 1 was generated by Kable[@citeKABLE] & R [@citeR]
+
+
+Table 1 makes it clearer that the social housing and TCHC are vastly under 
+presented in the total amount of rental apartments in Toronto. This makes 
+comparison more challenging to compare them both directly and accurately when
+there is such a discrepancy. This does provides a new direction with examining 
+why there is such a difference in the total number of rental units built in the 
+first place. 
+
+$$\\[1in]$$
+
+```{r Line Graph, echo= FALSE,  fig.pos="H"}
+
+builtGraph <- 
+  allData %>%
+  select(propertyType,yearBuilt) 
+
+sortBuiltGraph <-
+  builtGraph %>%
+  filter(builtGraph$yearBuilt > 1966) #range picked to make the data look more clear
+
+sortBuiltGraph <-
+  filter(sortBuiltGraph, propertyType == "SOCIAL HOUSING") 
+
+builtGraph <-
+  aggregate(. ~ yearBuilt,sortBuiltGraph, length)
+
+  
+ggplot(data=builtGraph, aes(x=yearBuilt, propertyType, group=1)) +
+  geom_step(color="blue")+
+  geom_point() +
+  xlab("Year Built") +
+  ylab("Number of Social Housing Units Built") +
+  scale_color_grey() + theme_classic() +
+  theme(legend.position="top") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("                    Graph 2 - Decline of Social Housing Being Built") +
+  labs(caption = "(Based on data from ggPlot2 (Wickham 2016) & R (R Core Team 2020))") 
+  
+  
+
+
+builtGraph2 <- 
+  allData %>%
+  select(propertyType,yearBuilt) 
+
+sortBuiltGraph2 <-
+  builtGraph2 %>%
+  filter(builtGraph2$yearBuilt > 1966) #range picked to make the data look more clear
+
+sortBuiltGraph2 <-
+  filter(sortBuiltGraph2, propertyType == "TCHC") 
+
+builtGraph2 <-
+  aggregate(. ~ yearBuilt,sortBuiltGraph2, length)
+
+  
+ggplot(data=builtGraph2, aes(x=yearBuilt, propertyType, group=1)) +
+  geom_step(color="red")+
+  geom_point() +
+  xlab("Year Built") +
+  ylab(" Number of TCHC Rental Apartments Built") +
+  scale_color_grey() + theme_classic() +
+  theme(legend.position="top") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("                      Graph 3 - Decline of TCHC Rentals Being Built ") +
+labs(caption = "(Based on data from ggPlot2 (Wickham 2016) & R (R Core Team 2020))") 
+  
+```
+
+$$\\[1in]$$
+
+Looking at Graph 3, it shows the gradual decline of TCHC apartments being built
+since the 1960’s with a sharp drop off in the early 1990’s. With Graph 2, the 
+Social Housing shows lower builds per year with a sharp increase in the early 1990’s, 
+followed by a steady drop off in supply. Both these line graphs are consistent
+with the Canadian government eliminating funding for new social housing in 1993
+and downloading that responsibility to the provincial governments whom in 1995. 
+After that a Conservative government was elected and they further downloaded 
+these responsibilities to the municipal governments [@citeAUG]. There has been 
+little help from the private sector to fill this void in Toronto that has 
+shifted their development away from rental housing apartments towards the more 
+higher profits from condominium development [@citeAUG]. 
+
+\newpage
+
+Table 2 was generated by Kable [@citeKABLE] & R [@citeR]
+
+# Research Question 2 – Does Access to Accessible Units Change Based on Property
+
+
+The research presented has presented the declining volume of rental 
+apartments and referenced tactics displayed by New York by private equity firms
+that try to gain as much profit out of low-income tenants while offering less 
+than exemplary experiences. Using our data, we can try and gain some insights 
+into the apartment rental offerings to those requiring accessibility services. 
+
+
+
+```{r Chart 2 Data, echo = FALSE,  fig.pos="H"}
+
+chart2Data <-
+  allData %>%
+  select(propertyType,rentalUnits, accessUnits)
+     
+chart2Data <-
+  chart2Data %>%
+  filter(rentalUnits < 750)
+
+chart2Data$accessUnits <- as.numeric(chart2Data$accessUnits)
+chart2Data$rentalUnits <- as.numeric(chart2Data$rentalUnits)
+  
+chart2Agg <-  
+    aggregate(. ~ propertyType, chart2Data, sum) 
+
+chart2 <-
+mutate(chart2Agg, Percentage = accessUnits / rentalUnits * 100)
+
+chart2 <-
+  rename(chart2, c("Property Type" = "propertyType",
+                   "Rental Units" = "rentalUnits",
+                   "Accessibility Units" = "accessUnits"))
+
+chart2 %>% 
+  knitr::kable(caption = "Summary statistics", digits = 2) %>%
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width =  FALSE)
+```
+
+
+
+From Table 2 we can gather a snapshot of how each property type scores on 
+the number of barrier free accessible units. The private sector is doing the 
+best at 11.94%, followed closely by Social Housing. What is really unfortunate
+with the data is how poor the TCHC is doing with less than 2% of units being 
+barrier free accessible. This increases the challenge to find appropriate 
+housing for those with accessibility concerns that also rely on 
+government-funded subsidized housing as they cannot compete in the private 
+market. Taking into consideration the already long waits for access to Toronto 
+Community Housing which at present is between seven to eight years long 
+[@citeOHRC]. Although the numbers are better in the private sector, there are 
+concerns over discrimination. In a study in Sweden, rental applicants who 
+inquired about a unit’s handicap accessibility when they contacted a prospective
+landlord received statistically fewer responses and less positive responses 
+than the control group that did not mention the disability[@citeMOM]. 
+Meaning that although the private sectormay provide better accessibility, it
+does not account for any struggle perceived or real, from tenants trying to 
+obtain appropriate housing. 
+
+
+
+\newpage
+
+# Conclusion 
+
+Toronto providing their open data is a boon for researchers looking for rental 
+housing data and others curious about the current state of the market. An 
+increase in access to this data can hopefully lead to better public policy 
+or at the very minimum, better civic engagement in housing debates which 
+access to is a international commitment by Canada. Within the context of the 
+open data there is a connection between Toronto and the larger global 
+phenomenon of governments not providing adequate numbers of social geared 
+housing since the 1990’s. This is concerning as the private sector has little
+incentive to address this as they are focused on the higher profitability of 
+condominiums in the city. Even more concerning is the state of the TCHC housing,
+as it scores lower than the private sector while being the refuge for Toronto’s 
+most vulnerable. It is the belief of the author that governments must provide 
+additional funding to bolster the supply of units and take more responsibility 
+in the active care of these units. Considering it takes upwards of 2-3 years 
+to build an apartment building when the first shovel hits the ground, 
+the government must move forward on these actions immediately in hopes for a 
+timely solution. It is the hope of this paper that further analysis can be 
+conducted through the release of more open data and the work built upon 
+by whomever has the desire and will. 
+
+
+```{r Save The Data, echo= FALSE}
+
+```
+
+
+# References 
